@@ -1,5 +1,6 @@
 using API.Domain;
 using API.Exceptions;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,5 +27,14 @@ public class CreatePlayerHandler(AppDbContext dbContext) : IRequestHandler<Creat
         await dbContext.SaveChangesAsync(cancellationToken);
         
         return newPlayer.Id;
+    }
+}
+
+public class CreatePlayerCommandValidator : AbstractValidator<CreatePlayerCommand>
+{
+    public CreatePlayerCommandValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().WithMessage("Name is required");
+        RuleFor(x => x.TeamId).NotEmpty().WithMessage("Team is required");
     }
 }

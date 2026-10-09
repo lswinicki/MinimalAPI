@@ -2,7 +2,9 @@ using API;
 using API.Domain;
 using API.Exceptions;
 using API.Exceptions.Handlers;
+using API.Helpers.Behaviors;
 using API.Methods.Player;
+using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +16,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 builder.Services.AddProblemDetails();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-builder.Services.AddMediatR(cfg => 
-    cfg.RegisterServicesFromAssemblyContaining<Program>());
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<Program>();
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>)); 
+});
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=academy.db")
@@ -34,10 +41,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseExceptionHandler();
 
-app.MapGet("/test-error", () =>
-{
-    throw new DomainException("Test Error from API");
-});
+app.MapGet("/test-error", () => { throw new DomainException("Test Error from API"); });
 
 app.MapGet("/nplus1-bad", async (AppDbContext db) =>
 {
@@ -47,8 +51,9 @@ app.MapGet("/nplus1-bad", async (AppDbContext db) =>
     foreach (var team in teams)
     {
         var players = await db.Players.Where(p => p.TeamId == team.Id).ToListAsync();
-        result.Add(new {team.Name, PlayersCount = players.Count});
+        result.Add(new { team.Name, PlayersCount = players.Count });
     }
+
     return result;
 });
 
@@ -63,9 +68,9 @@ app.MapGet("/nplus1-good", async (AppDbContext db) =>
 app.MapPost("/teams/{teamId}/players", async (int teamId, [FromBody] CreatePlayerRequest request, IMediator mediator) =>
 {
     var command = new CreatePlayerCommand(request.Name, teamId);
-    
+
     var playerId = await mediator.Send(command);
-    
+
     return Results.Ok(playerId);
 });
 
@@ -80,7 +85,7 @@ using (var scope = app.Services.CreateScope())
         var team1 = new Entities.Team { Name = "Team 1" };
         var team2 = new Entities.Team { Name = "Team 2" };
         db.Teams.AddRange(team1, team2);
-        
+
         db.Players.AddRange(
             new Entities.Player { Name = "Tom", Team = team1 },
             new Entities.Player { Name = "John", Team = team1 },
