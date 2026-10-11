@@ -3,8 +3,11 @@ using API.Domain;
 using API.Exceptions;
 using API.Exceptions.Handlers;
 using API.Helpers.Behaviors;
+using API.Jobs;
 using API.Methods.Player;
 using FluentValidation;
+using Hangfire;
+using Hangfire.Storage.SQLite;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +23,10 @@ builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
+builder.Services.AddScoped<PlayerWelcomeJob>();
+builder.Services.AddScoped<AcademyReportJob>();
+
+
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssemblyContaining<Program>();
@@ -29,6 +36,13 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=academy.db")
         .LogTo(Console.WriteLine, LogLevel.Information));
+
+builder.Services.AddHangfire(config => config
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSQLiteStorage("Data Source=academy.db;"));
+
+builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
@@ -40,6 +54,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseExceptionHandler();
+app.UseHangfireDashboard();
 
 app.MapGet("/test-error", () => { throw new DomainException("Test Error from API"); });
 
@@ -96,6 +111,11 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+RecurringJob.AddOrUpdate<AcademyReportJob>(
+    "academy-nightly-report",
+    job => job.GenerateReport(),
+    Cron.Minutely
+);
 app.Run();
 
 public partial class Program { }

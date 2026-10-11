@@ -1,6 +1,8 @@
 using API.Domain;
 using API.Exceptions;
+using API.Jobs;
 using FluentValidation;
+using Hangfire;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +27,8 @@ public class CreatePlayerHandler(AppDbContext dbContext) : IRequestHandler<Creat
         
         dbContext.Players.Add(newPlayer);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        BackgroundJob.Enqueue<PlayerWelcomeJob>(job => job.SendWelcomeEmail(newPlayer.Id));
         
         return newPlayer.Id;
     }
